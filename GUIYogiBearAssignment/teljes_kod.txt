@@ -1,0 +1,799 @@
+--- src/main/java/view/MainWindow.java ---
+package view;
+
+import java.awt.BorderLayout;
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
+import javax.imageio.ImageIO;
+import javax.swing.JFrame;
+import javax.swing.JMenu;
+import javax.swing.JMenuBar;
+import javax.swing.JMenuItem;
+import javax.swing.JOptionPane;
+import javax.swing.UIManager;
+import javax.swing.UnsupportedLookAndFeelException;
+import model.HighScore;
+
+/**
+ *
+ * @author Andras Boromissza [hyczbo]
+ */
+public class MainWindow extends JFrame {
+    private Canvas canvas;
+    private StatsPanel stats;
+    private JMenuBar menuBar;
+    private JMenu gameMenu;
+    private JMenuItem newGameItem;
+    private JMenuItem highScoresItem; 
+
+    public MainWindow() {        
+        initSelf();
+        initComponents();
+        setVisible(true);
+        showWelcomeMessage();        
+    }
+
+    private void initSelf() { 
+        initStyle();
+        setTitle("Yogi Bear Adventure");
+        setDefaultCloseOperation(EXIT_ON_CLOSE);
+        setResizable(false);
+    }
+    
+    private void initStyle() {
+        try {
+            setIconImage(ImageIO.read(new File("src/main/resources/yogi.jpg")));
+        } 
+        catch (IOException e) {
+            System.err.println("icon not found");
+        }               
+        try {
+            UIManager.setLookAndFeel("com.sun.java.swing.plaf.windows.WindowsLookAndFeel");
+        }
+        catch (ClassNotFoundException |
+                InstantiationException |
+                IllegalAccessException |
+                UnsupportedLookAndFeelException ex) {}          
+    }
+    
+    private void initComponents() {
+        initMenu();    
+        canvas = new Canvas();
+        stats = new StatsPanel();
+        add(stats, BorderLayout.NORTH);
+        add(canvas, BorderLayout.CENTER);
+        
+        pack();
+        setLocationRelativeTo(null);  
+    }
+    
+    private void initMenu() {
+        menuBar = new JMenuBar();
+        gameMenu = new JMenu("Game");
+        newGameItem = new JMenuItem("New Game");
+        highScoresItem = new JMenuItem("Leaderboard");
+        
+        gameMenu.add(newGameItem);
+        gameMenu.add(highScoresItem);
+        menuBar.add(gameMenu);
+        setJMenuBar(menuBar);
+    }
+    
+    private void showWelcomeMessage() {
+        String message = "<html><body style='width: 200px'>" +
+                "<h2 style='color: rgb(34, 139, 34)'>Welcome to Yogi Bear Adventure!</h2>" +
+                "<ul>" +
+                "<li>Help Yogi find all the baskets</li>" +
+                "<li>Avoid the rangers</li>" +
+                "<li>Yogi has 3 hearts, don't lose them</li>" +
+                "</ul>" +
+                "<br>" +
+                "<p>Controls: WASD</p>" +
+                "<br>" +
+                "<p>Good luck and bon'appetit!</p><br>" +
+                "</body></html>";
+
+        JOptionPane.showMessageDialog(this, message, "Welcome!", JOptionPane.INFORMATION_MESSAGE);
+    }
+    public String showGameOverDialog(int score) {
+        String name = JOptionPane.showInputDialog(this, 
+                "Yogi was slain by the rangers...\n" +
+                "Baskets: " + score + "\n" +
+                "Add your name to the leaderboard:", 
+                "Game Over!", 
+                JOptionPane.PLAIN_MESSAGE);
+        
+        return name;
+    }
+    public void showLeaderboardDialog(ArrayList<HighScore> top10) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("<html><h2 style='color: orange'>TOP 10</h2><ol>");
+        
+        for (HighScore h : top10) {
+            sb.append("<li><b>").append(h.getName()).append("</b>: ")
+              .append(h.getScore()).append(" points</li>");
+        }
+        sb.append("</ol></html>");
+        
+        if (top10.isEmpty()) {
+            sb = new StringBuilder("No one yet...");
+        }
+
+        JOptionPane.showMessageDialog(this, sb.toString(), "Leaderboard", JOptionPane.INFORMATION_MESSAGE);
+    }
+    
+    public void addNewGameListener(java.awt.event.ActionListener listener) {
+        newGameItem.addActionListener(listener);
+    }
+    public void addHighScoresListener(java.awt.event.ActionListener listener) {
+        highScoresItem.addActionListener(listener);
+    }
+
+    
+    public Canvas getCanvas() {return canvas;}
+    public StatsPanel getStatsPanel() {return stats;}
+}
+--- src/main/java/view/Canvas.java ---
+package view;
+
+import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.Graphics;
+import java.awt.Image;
+import java.io.IOException;
+import javax.imageio.ImageIO;
+import javax.swing.JPanel;
+import model.Game;
+import model.Tile;
+import model.TileType;
+
+/**
+ *
+ * @author Andras Boromissza [hyczbo]
+ */
+public class Canvas extends JPanel {
+    private Game game;
+    private final int TILE_SIZE = 40;
+    private Image yogiJPG;
+    private Image rangerJPG;
+    private Image treeJPG;
+    private Image basketJPG;
+    private Image grassJPG;
+
+    public Canvas() { 
+        setPreferredSize(new Dimension(TILE_SIZE*10, TILE_SIZE*10));
+        setBackground(new Color(34, 139, 34));
+        
+        loadImages();
+    }
+    
+    private void loadImages() {
+        try {
+            yogiJPG     = ImageIO.read(getClass().getResourceAsStream("/yogi.jpg"));
+            rangerJPG   = ImageIO.read(getClass().getResourceAsStream("/ranger.jpg"));
+            treeJPG     = ImageIO.read(getClass().getResourceAsStream("/tree.jpg"));
+            basketJPG   = ImageIO.read(getClass().getResourceAsStream("/basket.jpg"));
+            grassJPG    = ImageIO.read(getClass().getResourceAsStream("/grass.jpg"));        
+        }
+        catch (IOException e) {
+            System.out.println("Images could not be loaded!");
+        }
+    }    
+    
+    public void setGame(Game game) {
+        this.game = game;
+
+        if (game != null) {
+            setPreferredSize(new Dimension(
+                    game.getXCOLS() * TILE_SIZE, game.getYROWS() * TILE_SIZE));
+            revalidate();
+        }
+    }
+    
+    public void refresh() {
+        repaint();
+    }
+
+    @Override
+    protected void paintComponent(Graphics g) {
+        super.paintComponent(g);
+       
+        if (game == null) return;
+
+        for (Tile t : game.getMap()) {
+            drawTile(g, t);
+        }
+    }
+
+    private void drawTile(Graphics g, Tile t) {
+        int x = t.getX() * TILE_SIZE;
+        int y = t.getY() * TILE_SIZE;
+        
+        switch (t.getType()) {
+            case TileType.TREE ->
+                g.drawImage(treeJPG,    x, y, TILE_SIZE, TILE_SIZE, null);
+            case TileType.BASKET ->
+                g.drawImage(basketJPG,  x, y, TILE_SIZE, TILE_SIZE, null);
+            case TileType.RANGER ->
+                g.drawImage(rangerJPG,  x, y, TILE_SIZE, TILE_SIZE, null); 
+            case TileType.YOGI ->
+                g.drawImage(yogiJPG,    x, y, TILE_SIZE, TILE_SIZE, null);  
+            case TileType.GRASS ->
+                g.drawImage(grassJPG,   x, y, TILE_SIZE, TILE_SIZE, null);
+        }
+    }
+}
+--- src/main/java/view/StatsPanel.java ---
+package view;
+
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Font;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.border.EmptyBorder;
+
+/**
+ *
+ * @author Andras Boromissza [hyczbo]
+ */
+public class StatsPanel extends JPanel {
+    private final JLabel heartsLabel;
+    private final JLabel pointsLabel;
+    private final JLabel timeLabel;
+    public StatsPanel() {  
+        setLayout(new BorderLayout());
+        setBackground(new Color(245, 222, 179));
+        setBorder(new EmptyBorder(10, 20, 10, 20));
+        
+        heartsLabel = new JLabel("❤️❤️❤");
+        pointsLabel = new JLabel("0⭐");
+        timeLabel = new JLabel("00:00");
+        
+        Font font = new Font("Monospaced", Font.BOLD, 24);
+        heartsLabel.setFont(font);        
+        pointsLabel.setFont(font);       
+        timeLabel.setFont(font);
+        
+        pointsLabel.setHorizontalAlignment(JLabel.CENTER);
+        
+        heartsLabel.setForeground(Color.RED);
+        pointsLabel.setForeground(new Color(255, 140, 0));
+        timeLabel.setForeground(Color.DARK_GRAY);
+        
+        add(heartsLabel, BorderLayout.LINE_START);
+        add(pointsLabel, BorderLayout.CENTER);
+        add(timeLabel, BorderLayout.LINE_END);
+    }
+    public void updateStats(int hearts, int points, long elapsedTimeInMillis) {
+        drawHearts(hearts);
+        drawPoints(points);
+        drawTime(elapsedTimeInMillis);
+    }
+    public void drawHearts(int hearts) {
+        String str = "";
+        for (int i = 0; i < hearts; i++) {
+            str += "❤";
+        }
+        heartsLabel.setText(str);
+    }
+    public void drawPoints(int points) {
+        pointsLabel.setText(points + "⭐");
+    }
+    private void drawTime(long millis) {
+        long totalSeconds = millis / 1000;
+        long minutes = totalSeconds / 60;
+        long seconds = totalSeconds % 60;
+
+        String formattedTime = String.format("%02d:%02d", minutes, seconds);
+        
+        timeLabel.setText(formattedTime);
+    }
+    public void refresh() {
+        repaint();
+    }
+}
+--- src/main/java/model/Game.java ---
+package model;
+        
+import java.io.BufferedReader;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.util.ArrayList;       
+import java.util.Random;
+
+/**
+ *
+ * @author Andras Boromissza [hyczbo]
+ */
+public class Game {
+    private final int Y_ROWS = 10;
+    private final int X_COLS = 10;
+    
+    private Tile yogi;    
+    private final ArrayList<Tile> map;
+    private final ArrayList<Tile> rangers;
+    private final ArrayList<Tile> baskets;
+    
+    private int level = 1;
+    private int lives = 3;
+    private int score = 0;
+    
+    private int startX;
+    private int startY;
+    private final Random random = new Random();
+    private boolean gameOver = false;    
+
+    public Game() {
+        this.map = new ArrayList<>();
+        this.rangers = new ArrayList<>();
+        this.baskets = new ArrayList<>();
+        
+        this.level = 1;
+        this.lives = 3;
+        this.score = 0;        
+
+        try {
+            loadLevel(level);
+        }
+        catch (IOException e) {
+            System.out.println("Level could not be loaded!");
+        }
+
+    }
+
+    public void loadLevel(int level) throws FileNotFoundException, IOException {
+        
+        String filename = "/level" + level + ".txt";
+        InputStream is = getClass().getResourceAsStream(filename);
+        
+        BufferedReader br = new BufferedReader(new InputStreamReader(is));
+        
+        map.clear();
+        rangers.clear();
+        baskets.clear();
+        yogi = null;
+        
+        String line;
+        for (int y = 0; (line = br.readLine()) != null; y++) {
+            int x = 0;
+            for (char tileType : line.toCharArray()) {
+                switch (tileType) {
+                    case '#' -> map.add(new Tile(TileType.TREE,     x, y));
+                    case '_' -> map.add(new Tile(TileType.GRASS,    x, y));
+                    case '+' -> {
+                        Tile basket = new Tile(TileType.BASKET, x, y);
+                        baskets.add(basket);                         
+                        map.add(basket);                      
+                    }
+                    case 'R' -> {
+                        Tile ranger = new Tile(TileType.RANGER, x, y);
+                        rangers.add(ranger);
+                        map.add(ranger);
+                    }
+                    case 'Y' -> {
+                        yogi = new Tile(TileType.YOGI, x, y);
+                        startX = x;
+                        startY = y;
+                        map.add(yogi);
+                    }
+                    default -> System.out.println("Invalid tile in file!");
+                }
+                x++;
+            }
+        }
+    }
+    
+    public Tile getTileAt(int x, int y) {
+        return map.get(y * X_COLS + x);
+    }
+    
+    public boolean isValidTile(int x, int y) {
+        if (gameOver) {return false;}
+        
+        if (x < 0 || x >= X_COLS) {return false;}
+        if (y < 0 || y >= Y_ROWS) {return false;}
+        
+        TileType dstType = getTileAt(x, y).getType();
+        
+        if (dstType == TileType.TREE) {return false;}
+        
+        return true;
+    }    
+    
+    public void moveYogi(int dx, int dy) {
+        if (yogi == null || gameOver) {return;}
+
+        int xSrc = yogi.getX();
+        int ySrc = yogi.getY();
+        
+        Tile src = getTileAt(xSrc, ySrc);
+        
+        if (src.getType() != TileType.YOGI) {return;}
+        
+        int xDst = xSrc + dx;
+        int yDst = ySrc + dy;
+        
+        if (!isValidTile(xDst, yDst)) {return;} 
+        
+        Tile dst = getTileAt(xDst, yDst);
+        TileType dstType = dst.getType();
+        
+        if (dstType == TileType.RANGER) {return;}
+        
+        if (dstType == TileType.BASKET) {
+            score++;
+            baskets.remove(dst);
+            if (baskets.isEmpty()) {
+                try {
+                    level = (level % 10) + 1;
+                    loadLevel(level);
+                    return;
+                }
+                catch (IOException e) {
+                    System.out.println("Level could not be loaded!");
+                }
+            }
+        }
+
+        if (isRangerInSight(xDst, yDst)) {
+            lives--;
+            if (lives <= 0) {gameOver = true;}
+            dst = getTileAt(startX, startY);
+        }
+        
+        yogi = dst; 
+        dst.setType(TileType.YOGI);
+        src.setType(TileType.GRASS);
+    }
+    
+    public void moveARanger() {
+        if (rangers.isEmpty() || gameOver) {return;}
+
+        int srcIndex = random.nextInt(rangers.size());
+        Tile src = rangers.get(srcIndex);
+        
+        int xSrc = src.getX();
+        int ySrc = src.getY();
+        int dx;
+        int dy;
+        
+        int dir = random.nextInt(4);
+
+        switch (dir) {
+            case 0 -> {dx = 1; dy = 0;}
+            case 1 -> {dx = -1; dy = 0;}
+            case 2 -> {dx = 0; dy = 1;}
+            case 3 -> {dx = 0; dy = -1;}
+            default -> {dx = 0; dy = 0;}
+        }
+        
+        int xDst = xSrc + dx;
+        int yDst = ySrc + dy;
+
+        if (!isValidTile(xDst, yDst)) {return;}
+
+        Tile dst = getTileAt(xDst, yDst);
+        TileType dstType = dst.getType();
+        
+        if (    dstType == TileType.YOGI ||
+                dstType == TileType.BASKET) {return;}
+        
+        src.setType(TileType.GRASS);
+        dst.setType(TileType.RANGER);
+        rangers.set(srcIndex, dst);        
+        
+        if (isRangerInSight(yogi.getX(), yogi.getY())) {
+            lives--;
+            if (lives <= 0) {gameOver = true;}
+            xSrc = yogi.getX();
+            ySrc = yogi.getY();   
+            yogi.setType(TileType.GRASS);
+            yogi = getTileAt(startX, startY);             
+            yogi.setType(TileType.YOGI);            
+        }
+    }
+    
+    public boolean isRangerInSight(int x, int y) {
+        if ((x+1 < X_COLS && getTileAt(x+1, y).getType() == TileType.RANGER)
+        ||  (x-1 > 0      && getTileAt(x-1, y).getType() == TileType.RANGER)
+        ||  (y+1 < Y_ROWS && getTileAt(x, y+1).getType() == TileType.RANGER)
+        ||  (y-1 > 0      && getTileAt(x, y-1).getType() == TileType.RANGER)) {
+            return true;
+        }
+        else {return false;}
+    }    
+    
+    public int getXCOLS() {return X_COLS;}
+    public int getYROWS() {return Y_ROWS;}
+    public Tile getYogi() {return yogi;}
+    public int getScore() {return score;}
+    public int getLives() {return lives;}
+    public boolean isGameOver() {return gameOver;}
+    public ArrayList<Tile> getMap() {return map;}
+}
+--- src/main/java/model/Tile.java ---
+package model;
+
+/**
+ * y: row
+ * x: col
+ * @author Andras Boromissza [hyczbo]
+ */
+public class Tile {
+    private TileType type;
+    private final int x;    
+    private final int y;
+    
+    public Tile(TileType type, int x, int y) {
+        this.type = type;
+        this.x = x;        
+        this.y = y;
+    }
+    
+    public TileType getType() {return type;}
+    public void setType(TileType type) {
+        this.type = type;
+    }
+    public int getX() {return x;}    
+    public int getY() {return y;}
+}
+--- src/main/java/model/TileType.java ---
+package model;
+
+/**
+ *
+ * @author Andras Boromissza [hyczbo]
+ */
+public enum TileType {
+    GRASS, TREE, YOGI, RANGER, BASKET
+}
+--- src/main/java/model/HighScoreManager.java ---
+package model;
+
+import java.sql.*;
+import java.util.ArrayList;
+
+public class HighScoreManager {
+
+    private final int maxScores;
+    private final String dbURL = "jdbc:derby:yogiDB;create=true";
+    private final String TABLE_NAME = "HIGHSCORES";
+
+    public HighScoreManager(int maxScores) {
+        this.maxScores = maxScores;
+        
+        try (Connection conn = DriverManager.getConnection(dbURL)) {
+            if (!doesTableExist(conn)) {
+                createTable(conn);
+            }
+        } catch (SQLException e) {
+            System.err.println("Error upon init: " + e.getMessage());
+        }
+    }
+
+    public void putHighScore(String name, int score) {
+        String insertSQL = "INSERT INTO " + TABLE_NAME + " (NAME, SCORE, TS) VALUES (?, ?, ?)";
+        
+        try (Connection conn = DriverManager.getConnection(dbURL);
+             PreparedStatement pstmt = conn.prepareStatement(insertSQL)) {
+            
+            pstmt.setString(1, name);
+            pstmt.setInt(2, score);
+            pstmt.setTimestamp(3, new Timestamp(System.currentTimeMillis()));
+            pstmt.executeUpdate();
+            
+        } catch (SQLException e) {
+            System.err.println("Hiba a mentéskor: " + e.getMessage());
+        }
+    }
+
+    public ArrayList<HighScore> getHighScores() {
+        ArrayList<HighScore> highScores = new ArrayList<>();
+        
+        String query = "SELECT NAME, SCORE FROM " + TABLE_NAME + 
+                       " ORDER BY SCORE DESC FETCH FIRST " + maxScores + " ROWS ONLY";
+
+        try (Connection conn = DriverManager.getConnection(dbURL);
+             Statement stmt = conn.createStatement();
+             ResultSet results = stmt.executeQuery(query)) {
+
+            while (results.next()) {
+                String name = results.getString("NAME");
+                int score = results.getInt("SCORE");
+                highScores.add(new HighScore(name, score));
+            }
+            
+        } catch (SQLException e) {
+            System.err.println("Error upon query: " + e.getMessage());
+        }
+        
+        return highScores;
+    }
+
+    private boolean doesTableExist(Connection conn) throws SQLException {
+        DatabaseMetaData meta = conn.getMetaData();
+        ResultSet res = meta.getTables(null, null, TABLE_NAME, new String[] {"TABLE"});
+        return res.next();
+    }
+
+    private void createTable(Connection conn) throws SQLException {
+        String sql = "CREATE TABLE " + TABLE_NAME + " (" +
+                     "ID INT PRIMARY KEY GENERATED ALWAYS AS IDENTITY, " +
+                     "NAME VARCHAR(50), " +
+                     "SCORE INT, " +
+                     "TS TIMESTAMP)"; // Időbélyeg a biztonság kedvéért
+        try (Statement stmt = conn.createStatement()) {
+            stmt.execute(sql);
+            System.out.println("Database table created.");
+        }
+    }
+}
+--- src/main/java/model/HighScore.java ---
+package model;
+
+public class HighScore {
+    private final String name;
+    private final int score;
+
+    public HighScore(String name, int score) {
+        this.name = name;
+        this.score = score;
+    }
+
+    public String getName() { return name; }
+    public int getScore() { return score; }
+
+    @Override
+    public String toString() {
+        return name + " - " + score;
+    }
+}
+--- src/main/java/controller/App.java ---
+package controller;
+
+import view.MainWindow;
+
+/**
+ *
+ * @author Andras Boromissza [hyczbo]
+ */
+public class App {
+
+    /**
+     * @param args the command line arguments
+     */
+    public static void main(String[] args) {
+        MainWindow gameGUI = new MainWindow();
+        Controller controller = new Controller(gameGUI);
+    }
+    
+}
+--- src/main/java/controller/Controller.java ---
+package controller;
+
+import java.awt.event.ActionEvent;
+import java.util.ArrayList;
+import javax.swing.AbstractAction;
+import javax.swing.JComponent;
+import javax.swing.JPanel;
+import javax.swing.KeyStroke;
+import javax.swing.Timer;
+import model.Game;
+import model.HighScore;
+import model.HighScoreManager;
+import view.Canvas;
+import view.MainWindow;
+import view.StatsPanel;
+
+/**
+ *
+ * @author Andras Boromissza [hyczbo]
+ */
+public class Controller extends JPanel {
+    private Game game;
+    private MainWindow mainWindow;
+    private Canvas canvas;
+    private StatsPanel stats;
+    private HighScoreManager highScoreManager;
+    
+    private Timer gameTimer;
+    private long startTime;
+    private final int DELAY = 16;
+    private int tickCounter = 0;
+    
+    public Controller(MainWindow mainWindow) {
+        this.mainWindow = mainWindow;
+        this.canvas = mainWindow.getCanvas();
+        this.stats = mainWindow.getStatsPanel();
+        highScoreManager = new HighScoreManager(10);
+
+        gameTimer = new Timer(DELAY, (ActionEvent e) -> {
+            gameLoop();
+        });        
+        
+        newGame();
+        initKeyBindings();
+        
+        this.mainWindow.addNewGameListener(e -> {newGame();});
+        this.mainWindow.addHighScoresListener(e -> {showLeaderboard();});
+        
+        canvas.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
+                .put(KeyStroke.getKeyStroke("SPACE"), "pauseGame");
+        
+        canvas.getActionMap().put("pauseGame", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent ae) {
+                if (gameTimer.isRunning()) {
+                    gameTimer.stop();
+                }
+                else {
+                    gameTimer.start();
+                }
+            }
+        });        
+    }
+        
+    private void initKeyBindings() {
+        addMoveAction("A", -1, 0);
+        addMoveAction("D",  1, 0);
+        addMoveAction("W",  0, -1);
+        addMoveAction("S",  0, 1);       
+    }
+        
+    private void addMoveAction(String key, int dx, int dy) {
+        canvas.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
+                .put(KeyStroke.getKeyStroke(key), "move" + key);
+        
+        canvas.getActionMap().put("move" + key, new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent ae) {
+                game.moveYogi(dx, dy); 
+            }
+        });
+    }
+    
+    public void newGame() {
+        if (gameTimer.isRunning()) gameTimer.stop();
+        game = new Game();
+        canvas.setGame(game);   
+        startTime = System.currentTimeMillis();
+        gameTimer.start();
+    }
+    
+    private void gameLoop() {
+        if (game == null) {return;}
+        long elapsedTime = System.currentTimeMillis() - startTime;
+        
+        tickCounter++;
+        if (tickCounter >= 10) {
+            game.moveARanger();
+            tickCounter = 0;
+        }
+        
+        stats.updateStats(game.getLives(), game.getScore(), elapsedTime);
+        canvas.refresh();
+        
+        if (game.isGameOver()) {
+            gameTimer.stop();
+            handleGameOver();
+        }
+    }
+    private void handleGameOver() {
+        String name = mainWindow.showGameOverDialog(game.getScore());
+        
+        if (name != null && !name.trim().isEmpty()) {
+            highScoreManager.putHighScore(name.trim(), game.getScore());
+            showLeaderboard();
+        }
+    }
+
+    private void showLeaderboard() {
+        ArrayList<HighScore> top10 = highScoreManager.getHighScores();
+        mainWindow.showLeaderboardDialog(top10);
+    }
+
+}
